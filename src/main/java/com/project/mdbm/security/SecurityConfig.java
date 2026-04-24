@@ -40,6 +40,12 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/users/save", "/api/users/login", "/error").permitAll()
+                        .requestMatchers("/api/dbdetails/all").permitAll()
+                        .requestMatchers("/api/db/connect").permitAll()
+                        .requestMatchers("/api/db/tables").permitAll()
+                        .requestMatchers("/api/student/all").permitAll()
+                        .requestMatchers("/api/product/all").permitAll()
+                        .requestMatchers("/api/employee/all").permitAll()
                         .requestMatchers("/api/dbdetails/**").authenticated()
                         .anyRequest().authenticated()
                 )

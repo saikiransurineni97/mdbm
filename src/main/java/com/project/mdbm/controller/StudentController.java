@@ -3,7 +3,6 @@ package com.project.mdbm.controller;
 import com.project.mdbm.dto.GenericAPIResponse;
 import com.project.mdbm.dto.StudentRequest;
 import com.project.mdbm.dto.StudentResponse;
-import com.project.mdbm.entity.Student;
 import com.project.mdbm.service.StudentService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;

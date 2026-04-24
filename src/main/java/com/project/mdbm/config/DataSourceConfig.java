@@ -16,8 +16,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.sql.DataSource;
-import java.util.HashMap;
 import java.util.Map;
+// import java.util.HashMap;   // REMOVED
+import java.util.concurrent.ConcurrentHashMap; // ADDED
 
 @Configuration
 @EnableTransactionManagement
@@ -43,17 +44,20 @@ public class DataSourceConfig {
 
     private DynamicDataSource dynamicDataSource;
 
+    private final Map<Object, Object> targetDataSources = new ConcurrentHashMap<>(); // ADDED
+
     @Bean
     public DataSource dataSource() {
         dynamicDataSource = new DynamicDataSource();
 
         DataSource mysqlDataSource = createMySQLDataSource();
 
-        Map<Object, Object> targetDataSources = new HashMap<>();
-        targetDataSources.put("mysql", mysqlDataSource);
+        // Map<Object, Object> targetDataSources = new HashMap<>();   // REMOVED
+        targetDataSources.put("mysql", mysqlDataSource); // MODIFIED
 
         dynamicDataSource.setTargetDataSources(targetDataSources);
         dynamicDataSource.setDefaultTargetDataSource(mysqlDataSource);
+        dynamicDataSource.afterPropertiesSet(); // ADDED
 
         return dynamicDataSource;
     }
@@ -76,6 +80,10 @@ public class DataSourceConfig {
 
     public void addDataSource(String key, DBDetails dbDetails) {
 
+        if (targetDataSources.containsKey(key)) { // ADDED
+            return; // ADDED
+        } // ADDED
+
         String driverClassName;
 
         String url = dbDetails.getUrl();
@@ -94,9 +102,9 @@ public class DataSourceConfig {
         builder.password(dbDetails.getPassword());
         builder.driverClassName(driverClassName);
 
-        Map<Object, Object> targetDataSources = new HashMap<>();
-        targetDataSources.put("mysql", createMySQLDataSource());
-        targetDataSources.put(key, builder.build());
+        // Map<Object, Object> targetDataSources = new HashMap<>();   // REMOVED
+        // targetDataSources.put("mysql", createMySQLDataSource());   // REMOVED
+        targetDataSources.put(key, builder.build()); // MODIFIED
 
         dynamicDataSource.setTargetDataSources(targetDataSources);
         dynamicDataSource.afterPropertiesSet();
@@ -110,5 +118,4 @@ public class DataSourceConfig {
                 .driverClassName(mysqlDriverClassName)
                 .build();
     }
-
 }

@@ -1,6 +1,8 @@
 package com.project.mdbm.service;
 
-import com.project.mdbm.config.*;
+import com.project.mdbm.config.DataSourceConfig;
+import com.project.mdbm.config.DataSourceContextHolder;
+import com.project.mdbm.config.DynamicMongoManager;
 import com.project.mdbm.dto.GenericAPIResponse;
 import com.project.mdbm.entity.DBDetails;
 import com.project.mdbm.repository.DBDetailsRepository;
@@ -9,9 +11,23 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 @Service
 public class ConnectionManagerService {
+
+    private static final String SESSION_CONNECTION_NAME = "connectionName";
+    private static final String SESSION_DB_TYPE = "dbType";
+    private static final String NON_RELATIONAL = "Non-Relational";
 
     @Lazy
     @Autowired
@@ -23,6 +39,9 @@ public class ConnectionManagerService {
 
     @Autowired
     private DynamicMongoManager dynamicMongoManager;
+
+    @Autowired
+    private DataSource dataSource;
 
     public GenericAPIResponse connectToDatabase(String connectionName, HttpSession session) {
         GenericAPIResponse genericAPIResponse = ResponseUtils.getResponseObject();
@@ -43,8 +62,8 @@ public class ConnectionManagerService {
                 dynamicMongoManager.addMongoTemplate(connectionName, dbDetails);
             }
 
-            session.setAttribute("connectionName", connectionName);
-            session.setAttribute("dbType", dbDetails.getDbType());
+            session.setAttribute(SESSION_CONNECTION_NAME, connectionName);
+            session.setAttribute(SESSION_DB_TYPE, dbDetails.getDbType());
 
             genericAPIResponse.setCode(200);
             genericAPIResponse.setMessage("Successfully connected to " + connectionName);
@@ -53,6 +72,49 @@ public class ConnectionManagerService {
             genericAPIResponse.setCode(500);
             genericAPIResponse.setMessage("Failed to connect to database: " + e.getMessage());
             return genericAPIResponse;
+        }
+    }
+
+    public List<String> getTables(HttpSession session) {
+        String connectionName = (String) session.getAttribute(SESSION_CONNECTION_NAME);
+        String dbType = (String) session.getAttribute(SESSION_DB_TYPE);
+
+        List<String> tables = new ArrayList<>();
+
+        try {
+            if (!StringUtils.hasText(connectionName) || !StringUtils.hasText(dbType)) {
+                return tables;
+            }
+
+            if (NON_RELATIONAL.equalsIgnoreCase(dbType)) {
+                MongoTemplate mongoTemplate = dynamicMongoManager.getMongoTemplate(connectionName);
+                tables.addAll(mongoTemplate.getCollectionNames());
+                tables.sort(String::compareToIgnoreCase);
+                return tables;
+            }
+
+            DataSourceContextHolder.setDataSourceKey(connectionName);
+
+            try (Connection connection = dataSource.getConnection()) {
+                DatabaseMetaData metaData = connection.getMetaData();
+
+                try (ResultSet rs = metaData.getTables(connection.getCatalog(), null, "%", new String[]{"TABLE"})) {
+                    while (rs.next()) {
+                        String tableName = rs.getString("TABLE_NAME");
+                        if (StringUtils.hasText(tableName)) {
+                            tables.add(tableName);
+                        }
+                    }
+                }
+            }
+
+            tables.sort(Comparator.comparing(String::toLowerCase));
+            return tables;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch tables: " + e.getMessage(), e);
+        } finally {
+            DataSourceContextHolder.clear();
         }
     }
 
